@@ -1,5 +1,235 @@
-tmp/*
-config/database.php
-app/tmp/*
-app/config/database.php
-!empty
+<?php
+ 
+  define("_VALID_PHP", true);
+  
+  require_once("../../init.php");
+  require_once(WOJOLITE . "admin/modules/android/admin_class.php");
+  require_once(WOJOLITE . "admin/modules/android/lang/" . $core->language . ".lang.php");
+  
+  $android = new Android();
+
+  define('BASE_DIR', $android->filedir);
+  
+  $allowed_ext = array(
+  	'zip' => 'application/zip', 
+		'rar' => 'application/x-rar-compressed', 
+		'pdf' => 'application/pdf', 
+		'doc' => 'application/msword', 
+		'xls' => 'application/vnd.ms-excel', 
+		'ppt' => 'application/vnd.ms-powerpoint', 
+		'exe' => 'application/octet-stream', 
+		'gif' => 'image/gif', 
+		'png' => 'image/png', 
+		'jpg' => 'image/jpeg', 
+		'jpeg' => 'image/jpeg', 
+		'mp3' => 'audio/mpeg', 
+		'wav' => 'audio/x-wav', 
+		'mpeg' => 'video/mpeg', 
+		'mpg' => 'video/mpeg', 
+		'mpe' => 'video/mpeg', 
+		'mov' => 'video/quicktime', 
+		'avi' => 'video/x-msvideo'
+  );
+  
+  set_time_limit(0);
+  
+  if (ini_get('zlib.output_compression')) {
+      ini_set('zlib.output_compression', 'Off');
+  }
+  $pageslug = getValue("slug", "pages", "module_name = 'android'");
+?>
+<?php
+  // Free Downloads
+  if (isset($_GET['free'])) {
+      $row = $android->getFreeDownload($_GET['free']);
+
+      if ($row) {
+          $fname = basename($row['filename']);
+          $file_path = '';
+          $android->fetchFile(BASE_DIR, $fname, $file_path);
+
+          $fsize = filesize($file_path);
+          $fext = strtolower(substr(strrchr($fname, "."), 1));
+
+          if (!file_exists($file_path) || !is_file($file_path)) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=1');
+              die();
+          }
+
+          if (!array_key_exists($fext, $allowed_ext)) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=2');
+              die();
+          }
+
+          if ($android->allow_free == 'n' && !$user->logged_in) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=3');
+              die();
+          }
+
+          if ($allowed_ext[$fext] == '') {
+              $mtype = '';
+              if (function_exists('mime_content_type')) {
+                  $mtype = mime_content_type($file_path);
+              } elseif (function_exists('finfo_file')) {
+                  $finfo = finfo_open(FILEINFO_MIME);
+                  $mtype = finfo_file($finfo, $file_path);
+                  finfo_close($finfo);
+              }
+              if ($mtype == '') {
+                  $mtype = "application/force-download";
+              }
+          } else {
+              $mtype = $allowed_ext[$fext];
+          }
+
+          // set headers
+          header("Pragma: public");
+          header("Expires: 0");
+          header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+          header("Cache-Control: public");
+          header("Content-Description: File Transfer");
+          header("Content-Type: $mtype");
+          header("Content-Disposition: attachment; filename=\"$fname\"");
+          header("Content-Transfer-Encoding: binary");
+          header("Content-Length: " . $fsize);
+
+          print $android->readFile($file_path, true);
+
+      } else {
+          redirect_to(SITEURL . "/index.php");
+      }
+
+    // Membership Downloads
+  } elseif (isset($_GET['member']) && $user->logged_in) {
+      $row = $android->getMembershipDownload($_GET['member']);
+
+      if ($row) {
+          $m_arr = explode(",", $row['membership_id']);
+          reset($m_arr);
+
+          $fname = basename($row['filename']);
+          $file_path = '';
+          $android->fetchFile(BASE_DIR, $fname, $file_path);
+
+          $fsize = filesize($file_path);
+          $fext = strtolower(substr(strrchr($fname, "."), 1));
+
+          if (!file_exists($file_path) || !is_file($file_path)) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=1');
+              die();
+          }
+
+          if (!array_key_exists($fext, $allowed_ext)) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=2');
+              die();
+          }
+
+          if ($user->validateMembership() and in_array($user->membership_id, $m_arr)) {
+
+              if ($allowed_ext[$fext] == '') {
+                  $mtype = '';
+                  if (function_exists('mime_content_type')) {
+                      $mtype = mime_content_type($file_path);
+                  } elseif (function_exists('finfo_file')) {
+                      $finfo = finfo_open(FILEINFO_MIME);
+                      $mtype = finfo_file($finfo, $file_path);
+                      finfo_close($finfo);
+                  }
+                  if ($mtype == '') {
+                      $mtype = "application/force-download";
+                  }
+              } else {
+                  $mtype = $allowed_ext[$fext];
+              }
+              // set headers
+              header("Pragma: public");
+              header("Expires: 0");
+              header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+              header("Cache-Control: public");
+              header("Content-Description: File Transfer");
+              header("Content-Type: $mtype");
+              header("Content-Disposition: attachment; filename=\"$fname\"");
+              header("Content-Transfer-Encoding: binary");
+              header("Content-Length: " . $fsize);
+
+              print $android->readFile($file_path, true);
+
+          } else {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=4');
+              die();
+          }
+
+      } else {
+          redirect_to(SITEURL . "/index.php");
+      }
+	  
+	// Paid Downloads 
+  } elseif (isset($_GET['fileid'])) {
+      $row = $android->getPaidDownload($_GET['fileid']);
+
+      if ($row) {
+          $fname = basename($row['filename']);
+          $file_path = '';
+          $android->fetchFile(BASE_DIR, $fname, $file_path);
+
+          $fsize = filesize($file_path);
+          $fext = strtolower(substr(strrchr($fname, "."), 1));
+
+          $current_time = time();
+		  $filetime = $row['file_date'];
+          $newtime = $filetime + (1 * $android->utl_time * 60 * 60);
+
+          if (!file_exists($file_path) || !is_file($file_path)) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=1');
+              die();
+          }
+
+          if (!array_key_exists($fext, $allowed_ext)) {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=2');
+              die();
+          }
+
+          if ($current_time < $newtime) {
+
+              if ($allowed_ext[$fext] == '') {
+                  $mtype = '';
+                  if (function_exists('mime_content_type')) {
+                      $mtype = mime_content_type($file_path);
+                  } elseif (function_exists('finfo_file')) {
+                      $finfo = finfo_open(FILEINFO_MIME);
+                      $mtype = finfo_file($finfo, $file_path);
+                      finfo_close($finfo);
+                  }
+                  if ($mtype == '') {
+                      $mtype = "application/force-download";
+                  }
+              } else {
+                  $mtype = $allowed_ext[$fext];
+              }
+              // set headers
+              header("Pragma: public");
+              header("Expires: 0");
+              header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+              header("Cache-Control: public");
+              header("Content-Description: File Transfer");
+              header("Content-Type: $mtype");
+              header("Content-Disposition: attachment; filename=\"$fname\"");
+              header("Content-Transfer-Encoding: binary");
+              header("Content-Length: " . $fsize);
+
+              print $android->readFile($file_path, true);
+
+          } else {
+              redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=5');
+              die();
+          }
+
+      } else {
+          redirect_to(SITEURL . "/index.php");
+      }
+
+  } else {
+      redirect_to(($core->seo == 1) ? $core->site_url . '/content/android/?msg=1' : $core->site_url . '/modules.php?module=android&msg=6');
+      die();
+  }
+?>
